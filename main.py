@@ -43,7 +43,7 @@ app = FastAPI(lifespan=lifespan)
 async def search_naver(client: httpx.AsyncClient, query: str) -> list:
     raw = []
     try:
-        # 3페이지 병렬 호출 (최대 300개)
+        # 5페이지 병렬 호출 (최대 500개)
         async def fetch_page(start: int):
             resp = await client.get(
                 "https://openapi.naver.com/v1/search/shop.json",
@@ -59,7 +59,7 @@ async def search_naver(client: httpx.AsyncClient, query: str) -> list:
             return resp.json().get("items", [])
 
         pages = await asyncio.gather(
-            fetch_page(1), fetch_page(101), fetch_page(201),
+            fetch_page(1), fetch_page(101), fetch_page(201), fetch_page(301), fetch_page(401),
             return_exceptions=True,
         )
         for page in pages:
@@ -133,13 +133,17 @@ async def search_danawa(query: str) -> list:
             }
             elements.slice(0, 30).forEach(el => {
                 const titleEl = el.querySelector('.prod-name a, .tit-area a, a.prod_name, .prod_name a');
-                const priceEl = el.querySelector('.price-sect strong, .lowest-price .price, .prod_pricelist em, .price_list .price');
+                // 최저가 우선 선택
+                const priceEl = el.querySelector('.lowest-price strong, .lowest-price .price-sect strong, .price-sect strong, .prod_pricelist em');
                 if (!titleEl || !priceEl) return;
                 const priceText = priceEl.textContent.replace(/[^0-9]/g, '');
                 if (!priceText || priceText.length < 2) return;
+                const price = parseInt(priceText);
+                // 100원 미만 or 1억 초과는 파싱 오류로 제외
+                if (price < 100 || price > 100000000) return;
                 items.push({
                     title: titleEl.textContent.trim(),
-                    price: parseInt(priceText),
+                    price: price,
                     link: titleEl.href || ''
                 });
             });
@@ -186,13 +190,15 @@ async def search_enuri(query: str) -> list:
             }
             elements.slice(0, 30).forEach(el => {
                 const titleEl = el.querySelector('.tit a, .name a, a.goods-name, .goods-tit a, .goods_name a');
-                const priceEl = el.querySelector('.lowest-price .num, .price .num, strong.price, .price-area strong, .lowest_price .price');
+                const priceEl = el.querySelector('.lowest-price .num, .lowest_price .num, .price .num, strong.price, .price-area strong');
                 if (!titleEl || !priceEl) return;
                 const priceText = priceEl.textContent.replace(/[^0-9]/g, '');
                 if (!priceText || priceText.length < 2) return;
+                const price = parseInt(priceText);
+                if (price < 100 || price > 100000000) return;
                 items.push({
                     title: titleEl.textContent.trim(),
-                    price: parseInt(priceText),
+                    price: price,
                     link: titleEl.href || ''
                 });
             });
@@ -218,27 +224,49 @@ async def search_enuri(query: str) -> list:
 
 # ── API ───────────────────────────────────────────────────────
 @app.get("/api/search")
-async def search(q: str):
+async def search(
+    q: str,
+    include: str = "",
+    exclude: str = "",
+    min_price: int = 0,
+    max_price: int = 0,
+):
     if not q.strip():
         return []
+
+    # 필수 포함 단어를 검색어에 추가
+    full_query = q.strip()
+    if include.strip():
+        include_words = [w.strip() for w in include.split(",") if w.strip()]
+        full_query += " " + " ".join(include_words)
+
     try:
         async with httpx.AsyncClient() as client:
             naver, danawa, enuri = await asyncio.gather(
-                search_naver(client, q),
-                search_danawa(q),
-                search_enuri(q),
+                search_naver(client, full_query),
+                search_danawa(full_query),
+                search_enuri(full_query),
                 return_exceptions=True,
             )
         def safe(r): return r if isinstance(r, list) else []
         combined = safe(naver) + safe(danawa) + safe(enuri)
+
+        # 서버사이드 필터 적용
+        if exclude.strip():
+            ex_words = [w.strip().lower() for w in exclude.split(",") if w.strip()]
+            combined = [r for r in combined if not any(w in r["title"].lower() for w in ex_words)]
+        if min_price > 0:
+            combined = [r for r in combined if r["price"] >= min_price]
+        if max_price > 0:
+            combined = [r for r in combined if r["price"] <= max_price]
+
         combined.sort(key=lambda x: x["price"])
         return combined
     except Exception as e:
         print(f"[Search] fatal error: {e}")
-        # Playwright 실패해도 네이버만이라도 반환
         try:
             async with httpx.AsyncClient() as client:
-                naver = await search_naver(client, q)
+                naver = await search_naver(client, full_query)
             naver.sort(key=lambda x: x["price"])
             return naver
         except Exception as e2:

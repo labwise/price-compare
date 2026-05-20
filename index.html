@@ -399,7 +399,7 @@
     Object.values(tabs).forEach(t => {
       toSave[t.id] = {
         id: t.id, query: t.query, pinned: t.pinned, targetPrice: t.targetPrice,
-        interval: t.interval, excludeKeywords: t.excludeKeywords, minPrice: t.minPrice, maxPrice: t.maxPrice
+        interval: t.interval, mustInclude: t.mustInclude, excludeKeywords: t.excludeKeywords, minPrice: t.minPrice, maxPrice: t.maxPrice
       };
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
@@ -418,12 +418,13 @@
         tabs[id] = {
           id, query: s.query, results: [], pinned: s.pinned || null, targetPrice: s.targetPrice || null,
           alerts: [], interval: s.interval || 0, timer: null, lastUpdated: null,
-          excludeKeywords: s.excludeKeywords || "", minPrice: s.minPrice || "", maxPrice: s.maxPrice || ""
+          mustInclude: s.mustInclude || "", excludeKeywords: s.excludeKeywords || "", minPrice: s.minPrice || "", maxPrice: s.maxPrice || ""
         };
         renderTab(id);
         // 저장된 핀 복원
         if (tabs[id].pinned) renderPinned(id);
         // 저장된 필터 복원
+        if (tabs[id].mustInclude)    document.getElementById("mustInclude_" + id).value = tabs[id].mustInclude;
         if (tabs[id].excludeKeywords) document.getElementById("exclude_" + id).value = tabs[id].excludeKeywords;
         if (tabs[id].minPrice) document.getElementById("minPrice_" + id).value = tabs[id].minPrice;
         if (tabs[id].maxPrice) document.getElementById("maxPrice_" + id).value = tabs[id].maxPrice;
@@ -451,7 +452,7 @@
     if (existing) { activateTab(existing.id); refresh(existing.id); return; }
 
     const id = "tab_" + Date.now();
-    tabs[id] = { id, query: q, results: [], pinned: null, targetPrice: null, alerts: [], interval: 0, timer: null, lastUpdated: null, excludeKeywords: "", minPrice: "", maxPrice: "" };
+    tabs[id] = { id, query: q, results: [], pinned: null, targetPrice: null, alerts: [], interval: 0, timer: null, lastUpdated: null, mustInclude: "", excludeKeywords: "", minPrice: "", maxPrice: "" };
     renderTab(id);
     activateTab(id);
     refresh(id);
@@ -486,15 +487,18 @@
         <span class="last-update" id="lastUpdate_${id}">-</span>
       </div>
       <div class="filter-bar">
+        <label>필수 포함</label>
+        <input type="text" id="mustInclude_${id}" placeholder="사무용, 메쉬 (쉼표로 구분)"
+          oninput="scheduleRefresh('${id}')" style="flex:1;min-width:120px" />
         <label>제외 단어</label>
-        <input type="text" id="exclude_${id}" placeholder="커버, 컵홀더, 방석 (쉼표로 구분)"
-          oninput="applyFilter('${id}')" />
+        <input type="text" id="exclude_${id}" placeholder="커버, 컵홀더 (쉼표로 구분)"
+          oninput="scheduleRefresh('${id}')" style="flex:1;min-width:120px" />
         <label>가격 범위</label>
-        <input type="number" id="minPrice_${id}" placeholder="최소 (원)"
-          oninput="applyFilter('${id}')" />
+        <input type="number" id="minPrice_${id}" placeholder="최소"
+          oninput="scheduleRefresh('${id}')" />
         <span class="divider">~</span>
-        <input type="number" id="maxPrice_${id}" placeholder="최대 (원)"
-          oninput="applyFilter('${id}')" />
+        <input type="number" id="maxPrice_${id}" placeholder="최대"
+          oninput="scheduleRefresh('${id}')" />
         <span class="filter-count" id="filterCount_${id}"></span>
       </div>
       <div class="alert-area" id="alertArea_${id}"></div>
@@ -591,7 +595,12 @@
     tableWrap.innerHTML = `<div class="spinner-wrap"><div class="spinner"></div></div>`;
 
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(t.query)}`);
+      const params = new URLSearchParams({ q: t.query });
+      if (t.mustInclude)    params.set("include",   t.mustInclude);
+      if (t.excludeKeywords) params.set("exclude",  t.excludeKeywords);
+      if (t.minPrice)       params.set("min_price", t.minPrice);
+      if (t.maxPrice)       params.set("max_price", t.maxPrice);
+      const res = await fetch(`/api/search?${params}`);
       const data = await res.json();
       t.results = data;
       t.lastUpdated = now();
@@ -612,32 +621,21 @@
     }
   }
 
-  // ── 필터 적용 ────────────────────────────────────────────
-  function applyFilter(id) {
+  // ── 필터 디바운스 재검색 ──────────────────────────────────
+  const _refreshTimers = {};
+  function scheduleRefresh(id) {
     const t = tabs[id];
+    if (!t) return;
+    t.mustInclude    = document.getElementById("mustInclude_" + id)?.value || "";
     t.excludeKeywords = document.getElementById("exclude_" + id)?.value || "";
-    t.minPrice = document.getElementById("minPrice_" + id)?.value || "";
-    t.maxPrice = document.getElementById("maxPrice_" + id)?.value || "";
+    t.minPrice       = document.getElementById("minPrice_" + id)?.value || "";
+    t.maxPrice       = document.getElementById("maxPrice_" + id)?.value || "";
     saveTabs();
-    renderResults(id);
+    clearTimeout(_refreshTimers[id]);
+    _refreshTimers[id] = setTimeout(() => refresh(id), 800);
   }
 
-  function getFiltered(id) {
-    const t = tabs[id];
-    let data = [...t.results];
-
-    // 제외 키워드 필터
-    if (t.excludeKeywords.trim()) {
-      const keywords = t.excludeKeywords.split(",").map(k => k.trim().toLowerCase()).filter(Boolean);
-      data = data.filter(item => !keywords.some(kw => item.title.toLowerCase().includes(kw)));
-    }
-
-    // 가격 범위 필터
-    if (t.minPrice !== "") data = data.filter(item => item.price >= parseInt(t.minPrice));
-    if (t.maxPrice !== "") data = data.filter(item => item.price <= parseInt(t.maxPrice));
-
-    return data;
-  }
+  function getFiltered(id) { return tabs[id]?.results || []; }
 
   // ── 결과 렌더링 ───────────────────────────────────────────
   function renderResults(id) {
