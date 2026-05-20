@@ -309,6 +309,38 @@
     .pin-btn:hover { border-color: #1a73e8; color: #1a73e8; }
     .pin-btn.pinned { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
 
+    /* ── 판매처 펼치기 ── */
+    .expand-btn {
+      background: none;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      color: #888;
+      white-space: nowrap;
+    }
+    .expand-btn:hover { border-color: #1a73e8; color: #1a73e8; }
+    .sellers-list {
+      display: none;
+      margin-top: 6px;
+      border-top: 1px solid #f0f0f0;
+      padding-top: 6px;
+    }
+    .sellers-list.open { display: block; }
+    .seller-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 12px;
+      color: #555;
+    }
+    .seller-row a { color: #1a73e8; text-decoration: none; }
+    .seller-row a:hover { text-decoration: underline; }
+    .seller-price { font-weight: 700; color: #e53e3e; }
+    .seller-best { font-size: 10px; background: #fef9c3; color: #b45309; padding: 1px 5px; border-radius: 4px; }
+
     /* ── 로딩/빈 결과 ── */
     .empty-box {
       text-align: center;
@@ -645,9 +677,26 @@
       const titleCell = item.link
         ? `<a href="${item.link}" target="_blank" rel="noopener">${item.title}</a>`
         : item.title;
+
+      const sellers = item.sellers || [];
+      const extraSellers = sellers.slice(1);
+      const sellersHtml = extraSellers.length > 0 ? `
+        <button class="expand-btn" onclick="toggleSellers(this)">다른 판매처 ${extraSellers.length}개 ▾</button>
+        <div class="sellers-list">
+          ${extraSellers.map((s, si) => `
+            <div class="seller-row">
+              <span class="seller-price">${fmt(s.price)}</span>
+              <span>${s.mall || '-'}</span>
+              ${s.link ? `<a href="${s.link}" target="_blank" rel="noopener">바로가기</a>` : ''}
+            </div>`).join('')}
+        </div>` : '';
+
       return `<tr class="${isLowest ? 'lowest' : ''}">
         <td>${rankCell}</td>
-        <td class="prod-title">${titleCell}</td>
+        <td class="prod-title">
+          ${titleCell}
+          ${sellersHtml}
+        </td>
         <td>${badge(item.source)}</td>
         <td class="mall-col">${item.mall || '-'}</td>
         <td class="price-col">${fmt(item.price)}</td>
@@ -701,6 +750,13 @@
         <span class="pinned-target">목표가: ${fmt(t.targetPrice)}</span>
         <button class="unpin-btn" onclick="togglePin('${id}', ${t.results.findIndex(r => r.link === p.link)})">해제</button>
       </div>`;
+  }
+
+  // ── 판매처 펼치기 ────────────────────────────────────────
+  function toggleSellers(btn) {
+    const list = btn.nextElementSibling;
+    const open = list.classList.toggle("open");
+    btn.textContent = btn.textContent.replace(open ? "▾" : "▴", open ? "▴" : "▾");
   }
 
   // ── 페이지 로드 시 복원 ───────────────────────────────────

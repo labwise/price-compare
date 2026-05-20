@@ -39,33 +39,72 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-# ── 네이버 쇼핑 API ──────────────────────────────────────────
+# ── 네이버 쇼핑 API (다중 페이지 + 상품 그룹화) ─────────────
 async def search_naver(client: httpx.AsyncClient, query: str) -> list:
-    results = []
+    raw = []
     try:
-        resp = await client.get(
-            "https://openapi.naver.com/v1/search/shop.json",
-            params={"query": query, "display": 40, "sort": "asc"},
-            headers={
-                **HEADERS,
-                "X-Naver-Client-Id": NAVER_CLIENT_ID,
-                "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
-            },
-            timeout=10,
+        # 3페이지 병렬 호출 (최대 300개)
+        async def fetch_page(start: int):
+            resp = await client.get(
+                "https://openapi.naver.com/v1/search/shop.json",
+                params={"query": query, "display": 100, "start": start, "sort": "asc"},
+                headers={
+                    **HEADERS,
+                    "X-Naver-Client-Id": NAVER_CLIENT_ID,
+                    "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+                },
+                timeout=10,
+            )
+            resp.raise_for_status()
+            return resp.json().get("items", [])
+
+        pages = await asyncio.gather(
+            fetch_page(1), fetch_page(101), fetch_page(201),
+            return_exceptions=True,
         )
-        resp.raise_for_status()
-        for item in resp.json().get("items", []):
-            price = int(item.get("lprice", 0))
-            if price > 0:
-                results.append({
-                    "title": re.sub(r"<[^>]+>", "", item.get("title", "")),
-                    "price": price,
-                    "mall": item.get("mallName", ""),
-                    "link": item.get("link", ""),
-                    "source": "네이버",
-                })
+        for page in pages:
+            if isinstance(page, list):
+                raw.extend(page)
     except Exception as e:
         print(f"[Naver] {e}")
+
+    # productId 기준으로 그룹화
+    groups: dict = {}
+    for item in raw:
+        price = int(item.get("lprice", 0))
+        if price <= 0:
+            continue
+        pid = item.get("productId") or item.get("title", "")
+        title = re.sub(r"<[^>]+>", "", item.get("title", ""))
+        seller = {
+            "mall": item.get("mallName", ""),
+            "price": price,
+            "link": item.get("link", ""),
+        }
+        if pid not in groups:
+            groups[pid] = {"title": title, "sellers": []}
+        groups[pid]["sellers"].append(seller)
+
+    results = []
+    for g in groups.values():
+        # 가격 중복 제거 후 오름차순 정렬
+        seen_prices = set()
+        unique_sellers = []
+        for s in sorted(g["sellers"], key=lambda x: x["price"]):
+            key = (s["price"], s["mall"])
+            if key not in seen_prices:
+                seen_prices.add(key)
+                unique_sellers.append(s)
+        best = unique_sellers[0]
+        results.append({
+            "title": g["title"],
+            "price": best["price"],
+            "mall": best["mall"],
+            "link": best["link"],
+            "source": "네이버",
+            "sellers": unique_sellers,  # 모든 판매처
+        })
+
     return results
 
 
