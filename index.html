@@ -341,6 +341,65 @@
     .seller-price { font-weight: 700; color: #e53e3e; }
     .seller-best { font-size: 10px; background: #fef9c3; color: #b45309; padding: 1px 5px; border-radius: 4px; }
 
+    /* ── 태그 입력 ── */
+    .tag-input-wrap {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 5px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 4px 8px;
+      background: #fff;
+      flex: 1;
+      min-width: 180px;
+      cursor: text;
+    }
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      background: #e8f0fe;
+      color: #1a73e8;
+      border-radius: 12px;
+      padding: 2px 8px 2px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .tag-chip.exclude { background: #fce8e8; color: #e53e3e; }
+    .tag-remove {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      color: inherit;
+      padding: 0;
+      line-height: 1;
+      opacity: 0.6;
+    }
+    .tag-remove:hover { opacity: 1; }
+    .tag-text-input {
+      border: none;
+      outline: none;
+      font-size: 13px;
+      min-width: 70px;
+      flex: 1;
+      padding: 2px 0;
+    }
+    .tag-add-btn {
+      padding: 4px 10px;
+      background: #1a73e8;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .tag-add-btn:hover { background: #1558b0; }
+
     /* ── 로딩/빈 결과 ── */
     .empty-box {
       text-align: center;
@@ -399,7 +458,7 @@
     Object.values(tabs).forEach(t => {
       toSave[t.id] = {
         id: t.id, query: t.query, pinned: t.pinned, targetPrice: t.targetPrice,
-        interval: t.interval, mustInclude: t.mustInclude, excludeKeywords: t.excludeKeywords, minPrice: t.minPrice, maxPrice: t.maxPrice
+        interval: t.interval, mustIncludeTags: t.mustIncludeTags || [], excludeTags: t.excludeTags || [], minPrice: t.minPrice, maxPrice: t.maxPrice
       };
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
@@ -415,17 +474,25 @@
 
       ids.forEach(id => {
         const s = saved[id];
+        // backward compat: convert old comma-string format to arrays
+        let mustIncludeTags = Array.isArray(s.mustIncludeTags) ? s.mustIncludeTags : [];
+        let excludeTags = Array.isArray(s.excludeTags) ? s.excludeTags : [];
+        if (!mustIncludeTags.length && s.mustInclude)
+          mustIncludeTags = s.mustInclude.split(",").map(w => w.trim()).filter(Boolean);
+        if (!excludeTags.length && s.excludeKeywords)
+          excludeTags = s.excludeKeywords.split(",").map(w => w.trim()).filter(Boolean);
+
         tabs[id] = {
           id, query: s.query, results: [], pinned: s.pinned || null, targetPrice: s.targetPrice || null,
           alerts: [], interval: s.interval || 0, timer: null, lastUpdated: null,
-          mustInclude: s.mustInclude || "", excludeKeywords: s.excludeKeywords || "", minPrice: s.minPrice || "", maxPrice: s.maxPrice || ""
+          mustIncludeTags, excludeTags, minPrice: s.minPrice || "", maxPrice: s.maxPrice || ""
         };
         renderTab(id);
         // 저장된 핀 복원
         if (tabs[id].pinned) renderPinned(id);
         // 저장된 필터 복원
-        if (tabs[id].mustInclude)    document.getElementById("mustInclude_" + id).value = tabs[id].mustInclude;
-        if (tabs[id].excludeKeywords) document.getElementById("exclude_" + id).value = tabs[id].excludeKeywords;
+        if (mustIncludeTags.length) renderTags(id, 'mustInclude');
+        if (excludeTags.length)     renderTags(id, 'exclude');
         if (tabs[id].minPrice) document.getElementById("minPrice_" + id).value = tabs[id].minPrice;
         if (tabs[id].maxPrice) document.getElementById("maxPrice_" + id).value = tabs[id].maxPrice;
         // 저장된 자동 새로고침 복원
@@ -452,7 +519,7 @@
     if (existing) { activateTab(existing.id); refresh(existing.id); return; }
 
     const id = "tab_" + Date.now();
-    tabs[id] = { id, query: q, results: [], pinned: null, targetPrice: null, alerts: [], interval: 0, timer: null, lastUpdated: null, mustInclude: "", excludeKeywords: "", minPrice: "", maxPrice: "" };
+    tabs[id] = { id, query: q, results: [], pinned: null, targetPrice: null, alerts: [], interval: 0, timer: null, lastUpdated: null, mustIncludeTags: [], excludeTags: [], minPrice: "", maxPrice: "" };
     renderTab(id);
     activateTab(id);
     refresh(id);
@@ -488,11 +555,19 @@
       </div>
       <div class="filter-bar">
         <label>필수 포함</label>
-        <input type="text" id="mustInclude_${id}" placeholder="사무용, 메쉬 (쉼표로 구분)"
-          oninput="scheduleRefresh('${id}')" style="flex:1;min-width:120px" />
+        <div class="tag-input-wrap" id="mustIncludeWrap_${id}">
+          <div id="mustIncludeTags_${id}" style="display:contents"></div>
+          <input type="text" class="tag-text-input" id="mustIncludeInput_${id}" placeholder="단어 입력"
+            onkeydown="handleTagKeydown(event,'${id}','mustInclude')"/>
+          <button class="tag-add-btn" onclick="addTag('${id}','mustInclude')">추가</button>
+        </div>
         <label>제외 단어</label>
-        <input type="text" id="exclude_${id}" placeholder="커버, 컵홀더 (쉼표로 구분)"
-          oninput="scheduleRefresh('${id}')" style="flex:1;min-width:120px" />
+        <div class="tag-input-wrap" id="excludeWrap_${id}">
+          <div id="excludeTags_${id}" style="display:contents"></div>
+          <input type="text" class="tag-text-input" id="excludeInput_${id}" placeholder="단어 입력"
+            onkeydown="handleTagKeydown(event,'${id}','exclude')"/>
+          <button class="tag-add-btn" onclick="addTag('${id}','exclude')">추가</button>
+        </div>
         <label>가격 범위</label>
         <input type="number" id="minPrice_${id}" placeholder="최소"
           oninput="scheduleRefresh('${id}')" />
@@ -596,10 +671,10 @@
 
     try {
       const params = new URLSearchParams({ q: t.query });
-      if (t.mustInclude)    params.set("include",   t.mustInclude);
-      if (t.excludeKeywords) params.set("exclude",  t.excludeKeywords);
-      if (t.minPrice)       params.set("min_price", t.minPrice);
-      if (t.maxPrice)       params.set("max_price", t.maxPrice);
+      if (t.mustIncludeTags?.length) params.set("include",   t.mustIncludeTags.join(","));
+      if (t.excludeTags?.length)     params.set("exclude",   t.excludeTags.join(","));
+      if (t.minPrice)                params.set("min_price", t.minPrice);
+      if (t.maxPrice)                params.set("max_price", t.maxPrice);
       const res = await fetch(`/api/search?${params}`);
       const data = await res.json();
       t.results = data;
@@ -626,13 +701,55 @@
   function scheduleRefresh(id) {
     const t = tabs[id];
     if (!t) return;
-    t.mustInclude    = document.getElementById("mustInclude_" + id)?.value || "";
-    t.excludeKeywords = document.getElementById("exclude_" + id)?.value || "";
-    t.minPrice       = document.getElementById("minPrice_" + id)?.value || "";
-    t.maxPrice       = document.getElementById("maxPrice_" + id)?.value || "";
+    t.minPrice = document.getElementById("minPrice_" + id)?.value || "";
+    t.maxPrice = document.getElementById("maxPrice_" + id)?.value || "";
     saveTabs();
     clearTimeout(_refreshTimers[id]);
     _refreshTimers[id] = setTimeout(() => refresh(id), 800);
+  }
+
+  function handleTagKeydown(event, id, field) {
+    if (event.key === "Enter") { event.preventDefault(); addTag(id, field); }
+  }
+
+  function addTag(id, field) {
+    const t = tabs[id];
+    if (!t) return;
+    const inputEl = document.getElementById((field === 'mustInclude' ? 'mustIncludeInput_' : 'excludeInput_') + id);
+    const word = inputEl?.value.trim();
+    if (!word) return;
+    const arr = field === 'mustInclude' ? t.mustIncludeTags : t.excludeTags;
+    if (!arr.includes(word)) {
+      arr.push(word);
+      renderTags(id, field);
+      saveTabs();
+      clearTimeout(_refreshTimers[id]);
+      _refreshTimers[id] = setTimeout(() => refresh(id), 800);
+    }
+    if (inputEl) { inputEl.value = ""; inputEl.focus(); }
+  }
+
+  function removeTag(id, field, index) {
+    const t = tabs[id];
+    if (!t) return;
+    const arr = field === 'mustInclude' ? t.mustIncludeTags : t.excludeTags;
+    arr.splice(index, 1);
+    renderTags(id, field);
+    saveTabs();
+    clearTimeout(_refreshTimers[id]);
+    _refreshTimers[id] = setTimeout(() => refresh(id), 800);
+  }
+
+  function renderTags(id, field) {
+    const t = tabs[id];
+    if (!t) return;
+    const arr = field === 'mustInclude' ? t.mustIncludeTags : t.excludeTags;
+    const container = document.getElementById((field === 'mustInclude' ? 'mustIncludeTags_' : 'excludeTags_') + id);
+    if (!container) return;
+    const chipClass = field === 'mustInclude' ? 'tag-chip' : 'tag-chip exclude';
+    container.innerHTML = arr.map((word, i) =>
+      `<span class="${chipClass}">${word}<button class="tag-remove" onclick="removeTag('${id}','${field}',${i})">✕</button></span>`
+    ).join('');
   }
 
   function getFiltered(id) { return tabs[id]?.results || []; }
