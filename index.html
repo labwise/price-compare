@@ -6,243 +6,546 @@
   <title>최저가 비교</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Malgun Gothic', sans-serif; background: #f5f6fa; color: #333; }
+    body { font-family: 'Malgun Gothic', sans-serif; background: #f0f2f8; color: #222; }
 
+    /* ── 헤더 ── */
     header {
       background: #1a73e8;
       color: #fff;
-      padding: 24px 0;
-      text-align: center;
-    }
-    header h1 { font-size: 24px; font-weight: 700; }
-    header p { margin-top: 6px; font-size: 13px; opacity: 0.85; }
-
-    .search-box {
+      padding: 16px 24px;
       display: flex;
-      justify-content: center;
-      padding: 28px 16px 16px;
-      gap: 8px;
+      align-items: center;
+      gap: 12px;
     }
-    .search-box input {
-      width: 480px;
-      max-width: 100%;
-      padding: 12px 16px;
-      font-size: 15px;
-      border: 2px solid #1a73e8;
+    header h1 { font-size: 20px; font-weight: 700; white-space: nowrap; }
+    .search-row { display: flex; gap: 8px; flex: 1; }
+    .search-row input {
+      flex: 1;
+      padding: 10px 14px;
+      font-size: 14px;
+      border: none;
       border-radius: 8px;
       outline: none;
     }
-    .search-box button {
-      padding: 12px 24px;
-      background: #1a73e8;
-      color: #fff;
-      font-size: 15px;
+    .search-row button {
+      padding: 10px 20px;
+      background: #fff;
+      color: #1a73e8;
+      font-size: 14px;
+      font-weight: 700;
       border: none;
       border-radius: 8px;
       cursor: pointer;
-      transition: background 0.2s;
+      white-space: nowrap;
     }
-    .search-box button:hover { background: #1558b0; }
+    .search-row button:hover { background: #e8f0fe; }
 
-    .status {
-      text-align: center;
+    /* ── 탭 바 ── */
+    #tabBar {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      padding: 10px 16px 0;
+      background: #1a73e8;
+      overflow-x: auto;
+    }
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: #e8f0fe;
+      color: #1a73e8;
+      border-radius: 8px 8px 0 0;
       font-size: 13px;
-      color: #666;
-      min-height: 24px;
-      margin-bottom: 8px;
-    }
-
-    .spinner {
-      display: none;
-      margin: 20px auto;
-      width: 36px; height: 36px;
-      border: 4px solid #ddd;
-      border-top-color: #1a73e8;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .container { max-width: 1100px; margin: 0 auto; padding: 0 16px 40px; }
-
-    .summary {
-      display: none;
-      margin-bottom: 12px;
-      font-size: 14px;
-      color: #555;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 12px;
       font-weight: 600;
-      margin-left: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
     }
-    .badge-naver  { background: #03c75a20; color: #03c75a; }
-    .badge-danawa { background: #e8620020; color: #e86200; }
-    .badge-enuri  { background: #7c3aed20; color: #7c3aed; }
+    .tab.active { background: #f0f2f8; color: #222; }
+    .tab:not(.active):hover { background: #c5d8fd; }
+    .tab .close-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 15px;
+      color: inherit;
+      opacity: 0.6;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    .tab .close-btn:hover { opacity: 1; }
+    #noTab {
+      padding: 10px 16px;
+      color: rgba(255,255,255,0.7);
+      font-size: 13px;
+    }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
+    /* ── 탭 패널 ── */
+    .tab-panel { display: none; padding: 16px; max-width: 1200px; margin: 0 auto; }
+    .tab-panel.active { display: block; }
+
+    /* ── 설정 바 ── */
+    .ctrl-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       background: #fff;
       border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 10px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      flex-wrap: wrap;
     }
-    thead { background: #f0f4ff; }
-    th {
-      padding: 13px 14px;
-      text-align: left;
+    .ctrl-bar label { font-size: 13px; color: #555; }
+    .ctrl-bar select {
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
       font-size: 13px;
+      cursor: pointer;
+    }
+    .ctrl-bar .last-update { font-size: 12px; color: #999; margin-left: auto; }
+    .ctrl-bar .refresh-btn {
+      padding: 6px 14px;
+      background: #1a73e8;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .ctrl-bar .refresh-btn:hover { background: #1558b0; }
+
+    /* ── 알림 배너 ── */
+    .alert-area { margin-bottom: 12px; }
+    .alert-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(135deg, #fff8e1, #fff3cd);
+      border: 2px solid #f59e0b;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+    .alert-icon { font-size: 24px; }
+    .alert-body { flex: 1; }
+    .alert-title { font-size: 14px; font-weight: 700; color: #b45309; }
+    .alert-desc { font-size: 13px; color: #555; margin-top: 3px; }
+    .alert-desc a { color: #1a73e8; text-decoration: none; font-weight: 600; }
+    .alert-desc a:hover { text-decoration: underline; }
+    .alert-dismiss {
+      background: none;
+      border: 1px solid #f59e0b;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #b45309;
+    }
+
+    /* ── 핀 섹션 ── */
+    .pinned-section {
+      background: #fff;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      display: none;
+    }
+    .pinned-section.visible { display: block; }
+    .pinned-header {
+      font-size: 13px;
+      font-weight: 700;
       color: #555;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pinned-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      background: #f0f9ff;
+      border: 1.5px solid #0ea5e9;
+      border-radius: 8px;
+      flex-wrap: wrap;
+    }
+    .pinned-title { flex: 1; font-size: 14px; font-weight: 600; }
+    .pinned-title a { color: #0369a1; text-decoration: none; }
+    .pinned-title a:hover { text-decoration: underline; }
+    .pinned-price { font-size: 16px; font-weight: 700; color: #e53e3e; white-space: nowrap; }
+    .pinned-meta { font-size: 12px; color: #888; }
+    .pinned-target { font-size: 12px; color: #555; background: #e0f2fe; padding: 3px 8px; border-radius: 12px; }
+    .unpin-btn {
+      background: none;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #888;
+    }
+    .unpin-btn:hover { border-color: #e53e3e; color: #e53e3e; }
+
+    /* ── 결과 테이블 ── */
+    .results-wrap {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+    .results-summary {
+      padding: 10px 16px;
+      font-size: 13px;
+      color: #666;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead { background: #f8f9ff; }
+    th {
+      padding: 11px 14px;
+      text-align: left;
+      font-size: 12px;
+      color: #666;
       font-weight: 600;
     }
     td {
-      padding: 12px 14px;
-      font-size: 14px;
-      border-top: 1px solid #f0f0f0;
+      padding: 11px 14px;
+      font-size: 13px;
+      border-top: 1px solid #f5f5f5;
       vertical-align: middle;
     }
     tr.lowest { background: #fffbe6; }
-    tr:hover { background: #f5f8ff; }
+    tr:hover { background: #f7f9ff; }
     tr.lowest:hover { background: #fff5cc; }
 
-    .rank { font-weight: 700; color: #999; font-size: 13px; }
+    .rank { font-weight: 700; color: #ccc; font-size: 12px; }
     tr.lowest .rank { color: #f59e0b; }
-    .crown { margin-right: 2px; }
 
-    .prod-title { font-weight: 500; }
-    .prod-title a { color: #333; text-decoration: none; }
-    .prod-title a:hover { text-decoration: underline; color: #1a73e8; }
+    .prod-title a { color: #222; text-decoration: none; font-weight: 500; }
+    .prod-title a:hover { color: #1a73e8; text-decoration: underline; }
 
     .price-col { font-weight: 700; font-size: 15px; color: #e53e3e; white-space: nowrap; }
     tr.lowest .price-col { color: #d97706; }
+    .mall-col { color: #666; font-size: 12px; }
 
-    .mall-col { color: #555; font-size: 13px; }
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-naver  { background: #e6faf0; color: #03c75a; }
+    .badge-danawa { background: #fff0e6; color: #e86200; }
+    .badge-enuri  { background: #f3e8ff; color: #7c3aed; }
 
-    .no-result {
-      display: none;
+    .pin-btn {
+      background: none;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #aaa;
+      transition: all 0.15s;
+    }
+    .pin-btn:hover { border-color: #1a73e8; color: #1a73e8; }
+    .pin-btn.pinned { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
+
+    /* ── 로딩/빈 결과 ── */
+    .empty-box {
       text-align: center;
       padding: 60px 0;
-      color: #999;
+      color: #bbb;
       font-size: 15px;
     }
+    .spinner-wrap { display: flex; justify-content: center; padding: 40px 0; }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #1a73e8;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
-  <header>
-    <h1>최저가 비교</h1>
-    <p>네이버 쇼핑 · 다나와 · 에누리 동시 검색</p>
-  </header>
 
-  <div class="search-box">
-    <input id="query" type="text" placeholder="상품명을 입력하세요 (예: 갤럭시 S25)" />
+<header>
+  <h1>최저가 비교</h1>
+  <div class="search-row">
+    <input id="queryInput" type="text" placeholder="상품명 입력 (예: 아이패드 프로)" />
     <button onclick="doSearch()">검색</button>
   </div>
+</header>
 
-  <div class="container">
-    <div class="status" id="status"></div>
-    <div class="spinner" id="spinner"></div>
-    <div class="summary" id="summary"></div>
-    <div class="no-result" id="noResult">검색 결과가 없습니다.</div>
-    <table id="resultTable" style="display:none">
-      <thead>
-        <tr>
-          <th style="width:44px">#</th>
-          <th>상품명</th>
-          <th>출처</th>
-          <th>판매처</th>
-          <th>가격</th>
-        </tr>
-      </thead>
-      <tbody id="resultBody"></tbody>
-    </table>
-  </div>
+<div id="tabBar"><span id="noTab" style="color:rgba(255,255,255,0.7);font-size:13px;padding:10px 4px;">검색하면 탭이 생성됩니다</span></div>
 
-  <script>
-    document.getElementById("query").addEventListener("keydown", e => {
-      if (e.key === "Enter") doSearch();
-    });
+<div id="tabPanels"></div>
 
-    function fmt(n) {
-      return n.toLocaleString("ko-KR") + "원";
+<script>
+  let tabs = {};      // tabId → tab state
+  let activeTabId = null;
+
+  const INTERVALS = { "0": "수동", "60": "1분", "300": "5분", "600": "10분", "1800": "30분", "3600": "1시간" };
+  const SOURCE_CLASS = { "네이버": "naver", "다나와": "danawa", "에누리": "enuri" };
+
+  document.getElementById("queryInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") doSearch();
+  });
+
+  function fmt(n) { return n.toLocaleString("ko-KR") + "원"; }
+  function now()  { return new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+  function badge(src) {
+    const c = SOURCE_CLASS[src] || "naver";
+    return `<span class="badge badge-${c}">${src}</span>`;
+  }
+
+  // ── 검색 ──────────────────────────────────────────────────
+  function doSearch() {
+    const q = document.getElementById("queryInput").value.trim();
+    if (!q) return;
+
+    // 동일 검색어 탭이 있으면 활성화
+    const existing = Object.values(tabs).find(t => t.query === q);
+    if (existing) { activateTab(existing.id); refresh(existing.id); return; }
+
+    const id = "tab_" + Date.now();
+    tabs[id] = { id, query: q, results: [], pinned: null, targetPrice: null, alerts: [], interval: 0, timer: null, lastUpdated: null };
+    renderTab(id);
+    activateTab(id);
+    refresh(id);
+  }
+
+  // ── 탭 렌더링 ─────────────────────────────────────────────
+  function renderTab(id) {
+    const t = tabs[id];
+    document.getElementById("noTab")?.remove();
+
+    // 탭 버튼
+    const tabBar = document.getElementById("tabBar");
+    const tabEl = document.createElement("div");
+    tabEl.className = "tab";
+    tabEl.id = "tabBtn_" + id;
+    tabEl.innerHTML = `<span onclick="activateTab('${id}')">${t.query}</span>
+      <button class="close-btn" onclick="closeTab('${id}')">✕</button>`;
+    tabBar.appendChild(tabEl);
+
+    // 탭 패널
+    const panels = document.getElementById("tabPanels");
+    const panel = document.createElement("div");
+    panel.className = "tab-panel";
+    panel.id = "panel_" + id;
+    panel.innerHTML = `
+      <div class="ctrl-bar">
+        <label>자동 새로고침</label>
+        <select id="interval_${id}" onchange="setInterval_(${JSON.stringify(id)}, this.value)">
+          ${Object.entries(INTERVALS).map(([v,l]) => `<option value="${v}">${l}</option>`).join("")}
+        </select>
+        <button class="refresh-btn" onclick="refresh('${id}')">지금 새로고침</button>
+        <span class="last-update" id="lastUpdate_${id}">-</span>
+      </div>
+      <div class="alert-area" id="alertArea_${id}"></div>
+      <div class="pinned-section" id="pinnedSection_${id}">
+        <div class="pinned-header">📌 내 선택 최저가</div>
+        <div id="pinnedRow_${id}"></div>
+      </div>
+      <div class="results-wrap">
+        <div class="results-summary" id="summary_${id}">검색 중...</div>
+        <div id="tableWrap_${id}"></div>
+      </div>`;
+    panels.appendChild(panel);
+  }
+
+  function activateTab(id) {
+    activeTabId = id;
+    document.querySelectorAll(".tab").forEach(el => el.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(el => el.classList.remove("active"));
+    document.getElementById("tabBtn_" + id)?.classList.add("active");
+    document.getElementById("panel_" + id)?.classList.add("active");
+  }
+
+  function closeTab(id) {
+    const t = tabs[id];
+    if (t?.timer) clearInterval(t.timer);
+    delete tabs[id];
+    document.getElementById("tabBtn_" + id)?.remove();
+    document.getElementById("panel_" + id)?.remove();
+
+    const remaining = Object.keys(tabs);
+    if (remaining.length === 0) {
+      const noTab = document.createElement("span");
+      noTab.id = "noTab";
+      noTab.style.cssText = "color:rgba(255,255,255,0.7);font-size:13px;padding:10px 4px;";
+      noTab.textContent = "검색하면 탭이 생성됩니다";
+      document.getElementById("tabBar").appendChild(noTab);
+      activeTabId = null;
+    } else {
+      activateTab(remaining[remaining.length - 1]);
     }
+  }
 
-    function badgeHtml(source) {
-      const map = { "네이버": "naver", "다나와": "danawa", "에누리": "enuri" };
-      const cls = map[source] || "naver";
-      return `<span class="badge badge-${cls}">${source}</span>`;
+  // ── 자동 새로고침 ──────────────────────────────────────────
+  function setInterval_(id, val) {
+    const t = tabs[id];
+    if (!t) return;
+    if (t.timer) clearInterval(t.timer);
+    t.interval = parseInt(val);
+    if (t.interval > 0) {
+      t.timer = setInterval(() => refresh(id), t.interval * 1000);
+    } else {
+      t.timer = null;
     }
+  }
 
-    async function doSearch() {
-      const q = document.getElementById("query").value.trim();
-      if (!q) return;
+  // ── 데이터 가져오기 ───────────────────────────────────────
+  async function refresh(id) {
+    const t = tabs[id];
+    if (!t) return;
 
-      document.getElementById("spinner").style.display = "block";
-      document.getElementById("resultTable").style.display = "none";
-      document.getElementById("noResult").style.display = "none";
-      document.getElementById("summary").style.display = "none";
-      document.getElementById("status").textContent = "검색 중...";
+    const summary = document.getElementById("summary_" + id);
+    const tableWrap = document.getElementById("tableWrap_" + id);
+    summary.textContent = "검색 중...";
+    tableWrap.innerHTML = `<div class="spinner-wrap"><div class="spinner"></div></div>`;
 
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(t.query)}`);
+      const data = await res.json();
+      t.results = data;
+      t.lastUpdated = now();
+      document.getElementById("lastUpdate_" + id).textContent = "업데이트: " + t.lastUpdated;
 
-        document.getElementById("spinner").style.display = "none";
-
-        if (!data.length) {
-          document.getElementById("noResult").style.display = "block";
-          document.getElementById("status").textContent = "";
-          return;
+      // 핀된 가격보다 저렴한 결과 체크
+      if (t.pinned && data.length > 0) {
+        const cheapest = data[0];
+        if (cheapest.price < t.targetPrice && cheapest.link !== t.pinned.link) {
+          addAlert(id, cheapest);
         }
-
-        const counts = { 네이버: 0, 다나와: 0, 에누리: 0 };
-        data.forEach(d => { if (counts[d.source] !== undefined) counts[d.source]++; });
-
-        document.getElementById("summary").style.display = "block";
-        document.getElementById("summary").innerHTML =
-          `총 <strong>${data.length}개</strong> 결과 · ` +
-          Object.entries(counts).map(([k,v]) => `${badgeHtml(k)} ${v}건`).join(" ");
-
-        const tbody = document.getElementById("resultBody");
-        tbody.innerHTML = "";
-
-        data.forEach((item, i) => {
-          const isLowest = i === 0;
-          const tr = document.createElement("tr");
-          if (isLowest) tr.className = "lowest";
-
-          const rankCell = isLowest
-            ? `<span class="crown">👑</span><span class="rank">1</span>`
-            : `<span class="rank">${i + 1}</span>`;
-
-          const titleCell = item.link
-            ? `<a href="${item.link}" target="_blank" rel="noopener">${item.title}</a>`
-            : item.title;
-
-          tr.innerHTML = `
-            <td>${rankCell}</td>
-            <td class="prod-title">${titleCell}</td>
-            <td>${badgeHtml(item.source)}</td>
-            <td class="mall-col">${item.mall || "-"}</td>
-            <td class="price-col">${fmt(item.price)}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-
-        document.getElementById("resultTable").style.display = "table";
-        document.getElementById("status").textContent =
-          `최저가: ${fmt(data[0].price)} (${data[0].mall || data[0].source})`;
-
-      } catch (err) {
-        document.getElementById("spinner").style.display = "none";
-        document.getElementById("status").textContent = "오류가 발생했습니다. 서버를 확인해주세요.";
-        console.error(err);
       }
+
+      renderResults(id);
+    } catch (e) {
+      summary.textContent = "오류 발생. 다시 시도해주세요.";
+      tableWrap.innerHTML = `<div class="empty-box">데이터를 불러오지 못했습니다.</div>`;
     }
-  </script>
+  }
+
+  // ── 결과 렌더링 ───────────────────────────────────────────
+  function renderResults(id) {
+    const t = tabs[id];
+    const data = t.results;
+    const summary = document.getElementById("summary_" + id);
+    const tableWrap = document.getElementById("tableWrap_" + id);
+
+    if (!data.length) {
+      summary.textContent = "검색 결과가 없습니다.";
+      tableWrap.innerHTML = `<div class="empty-box">결과가 없습니다.</div>`;
+      return;
+    }
+
+    const counts = { 네이버: 0, 다나와: 0, 에누리: 0 };
+    data.forEach(d => { if (counts[d.source] !== undefined) counts[d.source]++; });
+    summary.innerHTML = `총 <strong>${data.length}개</strong> &nbsp;` +
+      Object.entries(counts).map(([k,v]) => badge(k) + ` ${v}건`).join(" ");
+
+    const tbody = data.map((item, i) => {
+      const isLowest = i === 0;
+      const isPinned = t.pinned && t.pinned.link === item.link;
+      const rankCell = isLowest ? `<span style="color:#f59e0b;font-size:14px">👑</span>` : `<span class="rank">${i+1}</span>`;
+      const titleCell = item.link
+        ? `<a href="${item.link}" target="_blank" rel="noopener">${item.title}</a>`
+        : item.title;
+      return `<tr class="${isLowest ? 'lowest' : ''}">
+        <td>${rankCell}</td>
+        <td class="prod-title">${titleCell}</td>
+        <td>${badge(item.source)}</td>
+        <td class="mall-col">${item.mall || '-'}</td>
+        <td class="price-col">${fmt(item.price)}</td>
+        <td><button class="pin-btn ${isPinned ? 'pinned' : ''}" onclick="togglePin('${id}', ${i})">${isPinned ? '📌 해제' : '📌 선택'}</button></td>
+      </tr>`;
+    }).join("");
+
+    tableWrap.innerHTML = `<table>
+      <thead><tr>
+        <th style="width:36px">#</th>
+        <th>상품명</th>
+        <th>출처</th>
+        <th>판매처</th>
+        <th>가격</th>
+        <th style="width:80px"></th>
+      </tr></thead>
+      <tbody>${tbody}</tbody>
+    </table>`;
+  }
+
+  // ── 핀 토글 ───────────────────────────────────────────────
+  function togglePin(id, idx) {
+    const t = tabs[id];
+    const item = t.results[idx];
+    if (t.pinned && t.pinned.link === item.link) {
+      t.pinned = null;
+      t.targetPrice = null;
+      document.getElementById("pinnedSection_" + id).classList.remove("visible");
+    } else {
+      t.pinned = item;
+      t.targetPrice = item.price;
+      renderPinned(id);
+    }
+    renderResults(id);
+  }
+
+  function renderPinned(id) {
+    const t = tabs[id];
+    if (!t.pinned) return;
+    const p = t.pinned;
+    const section = document.getElementById("pinnedSection_" + id);
+    section.classList.add("visible");
+    document.getElementById("pinnedRow_" + id).innerHTML = `
+      <div class="pinned-row">
+        <div class="pinned-title">
+          ${p.link ? `<a href="${p.link}" target="_blank" rel="noopener">${p.title}</a>` : p.title}
+        </div>
+        <span class="pinned-price">${fmt(p.price)}</span>
+        <span class="pinned-meta">${badge(p.source)} ${p.mall || ''}</span>
+        <span class="pinned-target">목표가: ${fmt(t.targetPrice)}</span>
+        <button class="unpin-btn" onclick="togglePin('${id}', ${t.results.findIndex(r => r.link === p.link)})">해제</button>
+      </div>`;
+  }
+
+  // ── 알림 ──────────────────────────────────────────────────
+  function addAlert(id, item) {
+    const area = document.getElementById("alertArea_" + id);
+    const alertId = "alert_" + Date.now();
+    const div = document.createElement("div");
+    div.className = "alert-card";
+    div.id = alertId;
+    div.innerHTML = `
+      <div class="alert-icon">🎉</div>
+      <div class="alert-body">
+        <div class="alert-title">추천! 새로운 최저가 갱신 사이트 발견</div>
+        <div class="alert-desc">
+          ${badge(item.source)} <strong>${item.mall || item.source}</strong> &nbsp;
+          <strong style="color:#e53e3e">${fmt(item.price)}</strong>
+          (선택가 ${fmt(tabs[id].targetPrice)} 대비 <strong>${fmt(tabs[id].targetPrice - item.price)}</strong> 저렴) &nbsp;
+          ${item.link ? `<a href="${item.link}" target="_blank" rel="noopener">바로가기 →</a>` : ''}
+        </div>
+        <div style="font-size:11px;color:#aaa;margin-top:4px;">${now()} 발견</div>
+      </div>
+      <button class="alert-dismiss" onclick="document.getElementById('${alertId}').remove()">닫기</button>`;
+    area.prepend(div);
+  }
+</script>
 </body>
 </html>
