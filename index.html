@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>최저가 비교</title>
+  <title>썬탱의 최저가 비교 사이트</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Malgun Gothic', sans-serif; background: #f0f2f8; color: #222; }
@@ -117,6 +117,15 @@
       cursor: pointer;
     }
     .ctrl-bar .refresh-btn:hover { background: #1558b0; }
+    .countdown {
+      font-size: 12px;
+      color: #fff;
+      background: #34a853;
+      padding: 3px 10px;
+      border-radius: 12px;
+      display: none;
+    }
+    .countdown.active { display: inline-block; }
 
     /* ── 필터 바 ── */
     .filter-bar {
@@ -321,7 +330,7 @@
 <body>
 
 <header>
-  <h1>최저가 비교</h1>
+  <h1>썬탱의 최저가 비교 사이트</h1>
   <div class="search-row">
     <input id="queryInput" type="text" placeholder="상품명 입력 (예: 아이패드 프로)" />
     <button onclick="doSearch()">검색</button>
@@ -389,7 +398,7 @@
         // 저장된 자동 새로고침 복원
         if (tabs[id].interval > 0) {
           document.getElementById("interval_" + id).value = tabs[id].interval;
-          tabs[id].timer = setInterval(() => refresh(id), tabs[id].interval * 1000);
+          setInterval_(id, tabs[id].interval);
         }
       });
 
@@ -441,6 +450,7 @@
           ${Object.entries(INTERVALS).map(([v,l]) => `<option value="${v}">${l}</option>`).join("")}
         </select>
         <button class="refresh-btn" onclick="refresh('${id}')">지금 새로고침</button>
+        <span class="countdown" id="countdown_${id}"></span>
         <span class="last-update" id="lastUpdate_${id}">-</span>
       </div>
       <div class="filter-bar">
@@ -477,8 +487,7 @@
   }
 
   function closeTab(id) {
-    const t = tabs[id];
-    if (t?.timer) clearInterval(t.timer);
+    clearTabTimers(id);
     delete tabs[id];
     document.getElementById("tabBtn_" + id)?.remove();
     document.getElementById("panel_" + id)?.remove();
@@ -497,18 +506,46 @@
     saveTabs();
   }
 
-  // ── 자동 새로고침 ──────────────────────────────────────────
+  // ── 자동 새로고침 + 카운트다운 ──────────────────────────────
   function setInterval_(id, val) {
     const t = tabs[id];
     if (!t) return;
     if (t.timer) clearInterval(t.timer);
+    if (t.countdown) clearInterval(t.countdown);
     t.interval = parseInt(val);
+    const cdEl = document.getElementById("countdown_" + id);
     if (t.interval > 0) {
-      t.timer = setInterval(() => refresh(id), t.interval * 1000);
+      let remaining = t.interval;
+      const tick = () => {
+        remaining--;
+        if (cdEl) {
+          cdEl.classList.add("active");
+          const m = Math.floor(remaining / 60);
+          const s = remaining % 60;
+          cdEl.textContent = m > 0 ? `${m}분 ${s}초 후 갱신` : `${s}초 후 갱신`;
+        }
+        if (remaining <= 0) {
+          remaining = t.interval;
+          refresh(id);
+        }
+      };
+      tick();
+      t.countdown = setInterval(tick, 1000);
+      t.timer = true;
     } else {
       t.timer = null;
+      t.countdown = null;
+      if (cdEl) cdEl.classList.remove("active");
     }
     saveTabs();
+  }
+
+  function clearTabTimers(id) {
+    const t = tabs[id];
+    if (!t) return;
+    if (t.countdown) clearInterval(t.countdown);
+    t.timer = null;
+    t.countdown = null;
   }
 
   // ── 데이터 가져오기 ───────────────────────────────────────
