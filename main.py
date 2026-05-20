@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     _browser = await _playwright.chromium.launch(
         headless=True,
         args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu",
-              "--disable-setuid-sandbox", "--single-process"],
+              "--disable-setuid-sandbox"],
     )
     yield
     await _browser.close()
@@ -182,15 +182,29 @@ async def search_enuri(query: str) -> list:
 async def search(q: str):
     if not q.strip():
         return []
-    async with httpx.AsyncClient() as client:
-        naver, danawa, enuri = await asyncio.gather(
-            search_naver(client, q),
-            search_danawa(q),
-            search_enuri(q),
-        )
-    combined = naver + danawa + enuri
-    combined.sort(key=lambda x: x["price"])
-    return combined
+    try:
+        async with httpx.AsyncClient() as client:
+            naver, danawa, enuri = await asyncio.gather(
+                search_naver(client, q),
+                search_danawa(q),
+                search_enuri(q),
+                return_exceptions=True,
+            )
+        def safe(r): return r if isinstance(r, list) else []
+        combined = safe(naver) + safe(danawa) + safe(enuri)
+        combined.sort(key=lambda x: x["price"])
+        return combined
+    except Exception as e:
+        print(f"[Search] fatal error: {e}")
+        # Playwright 실패해도 네이버만이라도 반환
+        try:
+            async with httpx.AsyncClient() as client:
+                naver = await search_naver(client, q)
+            naver.sort(key=lambda x: x["price"])
+            return naver
+        except Exception as e2:
+            print(f"[Search] naver fallback failed: {e2}")
+            return []
 
 
 @app.get("/", response_class=HTMLResponse)
