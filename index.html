@@ -118,6 +118,43 @@
     }
     .ctrl-bar .refresh-btn:hover { background: #1558b0; }
 
+    /* ── 필터 바 ── */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      flex-wrap: wrap;
+    }
+    .filter-bar label { font-size: 13px; color: #555; white-space: nowrap; }
+    .filter-bar input[type="text"] {
+      flex: 1;
+      min-width: 160px;
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .filter-bar input[type="number"] {
+      width: 110px;
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .filter-bar .divider { color: #ccc; }
+    .filter-count {
+      font-size: 12px;
+      color: #e53e3e;
+      font-weight: 600;
+      margin-left: auto;
+      white-space: nowrap;
+    }
+
     /* ── 알림 배너 ── */
     .alert-area { margin-bottom: 12px; }
     .alert-card {
@@ -319,7 +356,10 @@
   function saveTabs() {
     const toSave = {};
     Object.values(tabs).forEach(t => {
-      toSave[t.id] = { id: t.id, query: t.query, pinned: t.pinned, targetPrice: t.targetPrice, interval: t.interval };
+      toSave[t.id] = {
+        id: t.id, query: t.query, pinned: t.pinned, targetPrice: t.targetPrice,
+        interval: t.interval, excludeKeywords: t.excludeKeywords, minPrice: t.minPrice, maxPrice: t.maxPrice
+      };
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     if (activeTabId) localStorage.setItem(STORAGE_ACTIVE, activeTabId);
@@ -334,10 +374,18 @@
 
       ids.forEach(id => {
         const s = saved[id];
-        tabs[id] = { id, query: s.query, results: [], pinned: s.pinned || null, targetPrice: s.targetPrice || null, alerts: [], interval: s.interval || 0, timer: null, lastUpdated: null };
+        tabs[id] = {
+          id, query: s.query, results: [], pinned: s.pinned || null, targetPrice: s.targetPrice || null,
+          alerts: [], interval: s.interval || 0, timer: null, lastUpdated: null,
+          excludeKeywords: s.excludeKeywords || "", minPrice: s.minPrice || "", maxPrice: s.maxPrice || ""
+        };
         renderTab(id);
         // 저장된 핀 복원
         if (tabs[id].pinned) renderPinned(id);
+        // 저장된 필터 복원
+        if (tabs[id].excludeKeywords) document.getElementById("exclude_" + id).value = tabs[id].excludeKeywords;
+        if (tabs[id].minPrice) document.getElementById("minPrice_" + id).value = tabs[id].minPrice;
+        if (tabs[id].maxPrice) document.getElementById("maxPrice_" + id).value = tabs[id].maxPrice;
         // 저장된 자동 새로고침 복원
         if (tabs[id].interval > 0) {
           document.getElementById("interval_" + id).value = tabs[id].interval;
@@ -347,8 +395,6 @@
 
       const firstId = savedActive && tabs[savedActive] ? savedActive : ids[0];
       activateTab(firstId);
-
-      // 복원된 탭 전부 데이터 새로 가져오기
       ids.forEach(id => refresh(id));
     } catch(e) {
       localStorage.removeItem(STORAGE_KEY);
@@ -364,7 +410,7 @@
     if (existing) { activateTab(existing.id); refresh(existing.id); return; }
 
     const id = "tab_" + Date.now();
-    tabs[id] = { id, query: q, results: [], pinned: null, targetPrice: null, alerts: [], interval: 0, timer: null, lastUpdated: null };
+    tabs[id] = { id, query: q, results: [], pinned: null, targetPrice: null, alerts: [], interval: 0, timer: null, lastUpdated: null, excludeKeywords: "", minPrice: "", maxPrice: "" };
     renderTab(id);
     activateTab(id);
     refresh(id);
@@ -396,6 +442,18 @@
         </select>
         <button class="refresh-btn" onclick="refresh('${id}')">지금 새로고침</button>
         <span class="last-update" id="lastUpdate_${id}">-</span>
+      </div>
+      <div class="filter-bar">
+        <label>제외 단어</label>
+        <input type="text" id="exclude_${id}" placeholder="커버, 컵홀더, 방석 (쉼표로 구분)"
+          oninput="applyFilter('${id}')" />
+        <label>가격 범위</label>
+        <input type="number" id="minPrice_${id}" placeholder="최소 (원)"
+          oninput="applyFilter('${id}')" />
+        <span class="divider">~</span>
+        <input type="number" id="maxPrice_${id}" placeholder="최대 (원)"
+          oninput="applyFilter('${id}')" />
+        <span class="filter-count" id="filterCount_${id}"></span>
       </div>
       <div class="alert-area" id="alertArea_${id}"></div>
       <div class="pinned-section" id="pinnedSection_${id}">
@@ -485,23 +543,63 @@
     }
   }
 
+  // ── 필터 적용 ────────────────────────────────────────────
+  function applyFilter(id) {
+    const t = tabs[id];
+    t.excludeKeywords = document.getElementById("exclude_" + id)?.value || "";
+    t.minPrice = document.getElementById("minPrice_" + id)?.value || "";
+    t.maxPrice = document.getElementById("maxPrice_" + id)?.value || "";
+    saveTabs();
+    renderResults(id);
+  }
+
+  function getFiltered(id) {
+    const t = tabs[id];
+    let data = [...t.results];
+
+    // 제외 키워드 필터
+    if (t.excludeKeywords.trim()) {
+      const keywords = t.excludeKeywords.split(",").map(k => k.trim().toLowerCase()).filter(Boolean);
+      data = data.filter(item => !keywords.some(kw => item.title.toLowerCase().includes(kw)));
+    }
+
+    // 가격 범위 필터
+    if (t.minPrice !== "") data = data.filter(item => item.price >= parseInt(t.minPrice));
+    if (t.maxPrice !== "") data = data.filter(item => item.price <= parseInt(t.maxPrice));
+
+    return data;
+  }
+
   // ── 결과 렌더링 ───────────────────────────────────────────
   function renderResults(id) {
     const t = tabs[id];
-    const data = t.results;
+    const data = getFiltered(id);
+    const total = t.results.length;
+    const filtered = total - data.length;
     const summary = document.getElementById("summary_" + id);
     const tableWrap = document.getElementById("tableWrap_" + id);
+    const filterCount = document.getElementById("filterCount_" + id);
 
-    if (!data.length) {
+    if (filterCount) {
+      filterCount.textContent = filtered > 0 ? `${filtered}개 필터됨` : "";
+    }
+
+    if (!t.results.length) {
       summary.textContent = "검색 결과가 없습니다.";
       tableWrap.innerHTML = `<div class="empty-box">결과가 없습니다.</div>`;
       return;
     }
 
+    if (!data.length) {
+      summary.textContent = `전체 ${total}개 (필터로 전부 제외됨)`;
+      tableWrap.innerHTML = `<div class="empty-box">필터 조건에 맞는 결과가 없습니다.<br><small>제외 단어나 가격 범위를 조정해 보세요.</small></div>`;
+      return;
+    }
+
     const counts = { 네이버: 0, 다나와: 0, 에누리: 0 };
     data.forEach(d => { if (counts[d.source] !== undefined) counts[d.source]++; });
-    summary.innerHTML = `총 <strong>${data.length}개</strong> &nbsp;` +
-      Object.entries(counts).map(([k,v]) => badge(k) + ` ${v}건`).join(" ");
+    summary.innerHTML = `<strong>${data.length}개</strong> 표시 / 전체 ${total}개 &nbsp;` +
+      Object.entries(counts).map(([k,v]) => v > 0 ? badge(k) + ` ${v}건` : "").filter(Boolean).join(" ");
 
     const tbody = data.map((item, i) => {
       const isLowest = i === 0;
