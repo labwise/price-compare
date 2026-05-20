@@ -296,11 +296,13 @@
 <div id="tabPanels"></div>
 
 <script>
-  let tabs = {};      // tabId → tab state
+  let tabs = {};
   let activeTabId = null;
 
   const INTERVALS = { "0": "수동", "60": "1분", "300": "5분", "600": "10분", "1800": "30분", "3600": "1시간" };
   const SOURCE_CLASS = { "네이버": "naver", "다나와": "danawa", "에누리": "enuri" };
+  const STORAGE_KEY = "price_compare_tabs";
+  const STORAGE_ACTIVE = "price_compare_active";
 
   document.getElementById("queryInput").addEventListener("keydown", e => {
     if (e.key === "Enter") doSearch();
@@ -313,12 +315,51 @@
     return `<span class="badge badge-${c}">${src}</span>`;
   }
 
+  // ── localStorage 저장/복원 ────────────────────────────────
+  function saveTabs() {
+    const toSave = {};
+    Object.values(tabs).forEach(t => {
+      toSave[t.id] = { id: t.id, query: t.query, pinned: t.pinned, targetPrice: t.targetPrice, interval: t.interval };
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+    if (activeTabId) localStorage.setItem(STORAGE_ACTIVE, activeTabId);
+  }
+
+  function loadTabs() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+      const savedActive = localStorage.getItem(STORAGE_ACTIVE);
+      const ids = Object.keys(saved);
+      if (ids.length === 0) return;
+
+      ids.forEach(id => {
+        const s = saved[id];
+        tabs[id] = { id, query: s.query, results: [], pinned: s.pinned || null, targetPrice: s.targetPrice || null, alerts: [], interval: s.interval || 0, timer: null, lastUpdated: null };
+        renderTab(id);
+        // 저장된 핀 복원
+        if (tabs[id].pinned) renderPinned(id);
+        // 저장된 자동 새로고침 복원
+        if (tabs[id].interval > 0) {
+          document.getElementById("interval_" + id).value = tabs[id].interval;
+          tabs[id].timer = setInterval(() => refresh(id), tabs[id].interval * 1000);
+        }
+      });
+
+      const firstId = savedActive && tabs[savedActive] ? savedActive : ids[0];
+      activateTab(firstId);
+
+      // 복원된 탭 전부 데이터 새로 가져오기
+      ids.forEach(id => refresh(id));
+    } catch(e) {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }
+
   // ── 검색 ──────────────────────────────────────────────────
   function doSearch() {
     const q = document.getElementById("queryInput").value.trim();
     if (!q) return;
 
-    // 동일 검색어 탭이 있으면 활성화
     const existing = Object.values(tabs).find(t => t.query === q);
     if (existing) { activateTab(existing.id); refresh(existing.id); return; }
 
@@ -327,6 +368,7 @@
     renderTab(id);
     activateTab(id);
     refresh(id);
+    saveTabs();
   }
 
   // ── 탭 렌더링 ─────────────────────────────────────────────
@@ -334,7 +376,6 @@
     const t = tabs[id];
     document.getElementById("noTab")?.remove();
 
-    // 탭 버튼
     const tabBar = document.getElementById("tabBar");
     const tabEl = document.createElement("div");
     tabEl.className = "tab";
@@ -343,7 +384,6 @@
       <button class="close-btn" onclick="closeTab('${id}')">✕</button>`;
     tabBar.appendChild(tabEl);
 
-    // 탭 패널
     const panels = document.getElementById("tabPanels");
     const panel = document.createElement("div");
     panel.className = "tab-panel";
@@ -375,6 +415,7 @@
     document.querySelectorAll(".tab-panel").forEach(el => el.classList.remove("active"));
     document.getElementById("tabBtn_" + id)?.classList.add("active");
     document.getElementById("panel_" + id)?.classList.add("active");
+    localStorage.setItem(STORAGE_ACTIVE, id);
   }
 
   function closeTab(id) {
@@ -395,6 +436,7 @@
     } else {
       activateTab(remaining[remaining.length - 1]);
     }
+    saveTabs();
   }
 
   // ── 자동 새로고침 ──────────────────────────────────────────
@@ -408,6 +450,7 @@
     } else {
       t.timer = null;
     }
+    saveTabs();
   }
 
   // ── 데이터 가져오기 ───────────────────────────────────────
@@ -504,6 +547,7 @@
       renderPinned(id);
     }
     renderResults(id);
+    saveTabs();
   }
 
   function renderPinned(id) {
@@ -523,6 +567,9 @@
         <button class="unpin-btn" onclick="togglePin('${id}', ${t.results.findIndex(r => r.link === p.link)})">해제</button>
       </div>`;
   }
+
+  // ── 페이지 로드 시 복원 ───────────────────────────────────
+  window.addEventListener("DOMContentLoaded", loadTabs);
 
   // ── 알림 ──────────────────────────────────────────────────
   function addAlert(id, item) {
